@@ -39,11 +39,15 @@ _LANG_MAP = {
     "ml": "ml-IN",
     "mr": "mr-IN",
     "pa": "pa-IN",
-    "or": "od-IN",
+    "or": "or-IN",
 }
 
 
 class SarvamTranslationProvider(TranslationProvider):
+    SUPPORTED_LANGUAGES = {
+    "en", "hi", "bn", "ta", "te",
+    "gu", "kn", "ml", "mr", "pa", "or"
+}
     def __init__(self) -> None:
         if not settings.sarvam_api_key:
             raise MissingCredentialsError(
