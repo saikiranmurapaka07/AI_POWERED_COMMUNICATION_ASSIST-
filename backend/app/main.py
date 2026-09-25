@@ -28,8 +28,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5173",
-    "https://ai-voicecall-communicating-assist.vercel.app",
+    
         "https://ai-powered-communication-assist.vercel.app",
 ],
     allow_origin_regex=settings.cors_origin_regex,
