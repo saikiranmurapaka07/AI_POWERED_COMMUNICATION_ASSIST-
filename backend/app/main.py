@@ -30,6 +30,7 @@ app.add_middleware(
     allow_origins=[
     "http://localhost:5173",
     "https://ai-voicecall-communicating-assist.vercel.app",
+        "https://ai-powered-communication-assist.vercel.app",
 ],
     allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=False,
