@@ -3,7 +3,7 @@
 // provider API keys are used — nothing here ever touches OpenAI/Google
 // directly or sees a secret.
 
-import { BACKEND_URL } from "../config";
+import { BACKEND_URL } from "../config.js";
 
 async function throwForErrorResponse(res) {
   let body = null;
@@ -31,13 +31,13 @@ export async function fetchHealth() {
  * caller is expected to decode it with the Web Audio API and feed it into
  * the shared AudioMixer, never play it with browser speechSynthesis.
  */
-export async function synthesizeSpeech(text, { voice, language } = {}) {
+export async function synthesizeSpeech(text, { voice, language, speaker, pace, temperature } = {}) {
   let res;
   try {
     res = await fetch(`${BACKEND_URL}/api/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice, language }),
+      body: JSON.stringify({ text, voice, language, speaker, pace, temperature }),
     });
   } catch (err) {
     const e = new Error(`Network error while fetching TTS: ${err.message}`);
@@ -91,4 +91,67 @@ export async function generateAIReply(message, { conversationHistory, language }
   });
   if (!res.ok) await throwForErrorResponse(res);
   return res.json();
+}
+
+export async function searchAssist({
+  speaker,
+  message,
+  conversationHistory = [],
+  language = "English",
+}) {
+  const response = await fetch(
+    `${BACKEND_URL}/api/ai/assist`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        speaker,
+        message,
+        conversation_history: conversationHistory,
+        language,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Search Assist failed (${response.status}): ${errorText}`
+    );
+  }
+
+  return response.json();
+}
+
+
+export async function needsSearch({
+  message,
+  language = "English",
+}) {
+  const response = await fetch(
+    `${BACKEND_URL}/api/ai/needs-search`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message,
+        language,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Search decision failed (${response.status}): ${errorText}`
+    );
+  }
+
+  return response.json();
 }

@@ -70,15 +70,164 @@ def generate_speech_wav(
     text: str,
     voice: str | None = None,
     max_chars: int = 5000,
+    language: str | None = None,
+    speaker: str | None = None,
+    pace: float | None = None,
+    temperature: float | None = None,
 ) -> Tuple[bytes, str]:
-    """Generate WAV audio using the Piper CLI.
+    """Generate WAV audio.
 
-    This function works for both local Windows setups (absolute paths to
-    a piper.exe) and Linux production deployments where `piper` is on
-    PATH. The Piper model may be either a single file or a model
-    directory (containing an .onnx and .onnx.json).
+    By default this used Piper. To minimize changes, keep the same
+    function signature and behavior, but if `settings.tts_provider` is
+    set to "sarvam" call the Sarvam Bulbul v3 TTS HTTP API and write
+    the returned audio to a temporary WAV file for the existing
+    streaming/cleanup path to remain unchanged.
     """
 
+    if not text or not text.strip():
+        raise ProviderError("Empty text is not allowed for TTS.", provider="tts")
+
+    if max_chars and len(text) > max_chars:
+        raise ProviderError(f"Text exceeds maximum length of {max_chars} characters.", provider="tts")
+
+    # If configured to use Sarvam for TTS, call its text-to-speech endpoint.
+    if getattr(settings, "tts_provider", "piper") == "sarvam":
+        # Local import to avoid adding global dependency unless used.
+        import httpx
+        import base64
+
+        # Map short language codes to Sarvam locales for the supported 11 languages.
+        LANG_MAP = {
+            "en": "en-IN",
+            "hi": "hi-IN",
+            "bn": "bn-IN",
+            "ta": "ta-IN",
+            "te": "te-IN",
+            "kn": "kn-IN",
+            "ml": "ml-IN",
+            "mr": "mr-IN",
+            "gu": "gu-IN",
+            "pa": "pa-IN",
+            "or": "or-IN",
+        }
+
+        # Prefer explicit language parameter if provided (two-letter code)
+        cand = None
+        if language and len(language) == 2:
+            cand = language
+        elif voice and len(voice) == 2:
+            cand = voice
+        if not cand:
+            cand = "en"
+
+        locale = LANG_MAP.get(cand, "en-IN")
+
+        api_key = settings.sarvam_api_key
+        if not api_key:
+            raise PiperNotFoundError("SARVAM_API_KEY is not configured in backend/.env", provider="sarvam")
+
+        # Sarvam TTS JSON endpoint: returns {"request_id":..., "audios": ["<base64>"]}
+        # Use the 'text' field (Sarvam expects 'text' or 'inputs').
+        # Map frontend speaker identifiers to Sarvam Bulbul v3 speaker names.
+        SPEAKER_MAP = {
+            "default": "aditya",
+            "bulbul_male": "aditya",
+            "bulbul_female": "neha",
+            "bulbul_neutral": "manan",
+        }
+        sarvam_speaker = SPEAKER_MAP.get((speaker or "default").lower(), speaker or "aditya")
+
+        payload = {
+            "text": text,
+            "language_code": locale,
+            "model": "bulbul:v3",
+            "speaker": sarvam_speaker,
+        }
+        # Add optional numeric params if provided and valid
+        if pace is not None:
+            payload["pace"] = float(pace)
+        if temperature is not None:
+            payload["temperature"] = float(temperature)
+        headers = {
+            "api-subscription-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        logger.debug("Sarvam TTS request: locale=%s input_len=%d", locale, len(text))
+
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post("https://api.sarvam.ai/text-to-speech", json=payload, headers=headers)
+        except httpx.RequestError as exc:
+            raise ProviderError(f"Sarvam TTS request failed: {exc}", provider="sarvam") from exc
+
+        if resp.status_code in (401, 403):
+            raise ProviderError("Sarvam TTS rejected API key.", provider="sarvam")
+        if resp.status_code >= 500:
+            raise ProviderError(f"Sarvam TTS service error {resp.status_code}", provider="sarvam")
+        if resp.status_code >= 400:
+            # Client errors (bad request, unsupported language, etc.)
+            raise ProviderError(f"Sarvam TTS error {resp.status_code}: {resp.text[:300]}", provider="sarvam")
+
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise ProviderError(f"Could not parse Sarvam JSON response: {exc}", provider="sarvam") from exc
+
+        audios = data.get("audios") if isinstance(data, dict) else None
+        if not audios or not isinstance(audios, list) or not audios[0]:
+            raise ProviderError("Sarvam TTS returned no audio entries.", provider="sarvam")
+
+        # Decode the first base64 audio string. Do NOT log the base64 data.
+        try:
+            audio_bytes = base64.b64decode(audios[0])
+        except Exception as exc:
+            raise ProviderError(f"Failed to decode Sarvam audio: {exc}", provider="sarvam") from exc
+
+        if not audio_bytes:
+            raise ProviderError("Sarvam TTS returned empty audio bytes.", provider="sarvam")
+
+        # Write to temporary WAV file so existing FileResponse cleanup works.
+        fd, out_path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        try:
+            with open(out_path, "wb") as f:
+                f.write(audio_bytes)
+
+            # Quick header validation (RIFF/WAVE)
+            header_ok = False
+            try:
+                with open(out_path, "rb") as audio_file:
+                    hdr = audio_file.read(12)
+                    if len(hdr) >= 12 and hdr[0:4] == b"RIFF" and hdr[8:12] == b"WAVE":
+                        header_ok = True
+            except OSError:
+                header_ok = False
+
+            if not header_ok:
+                # Cleanup and raise
+                try:
+                    if os.path.exists(out_path):
+                        os.remove(out_path)
+                except OSError:
+                    pass
+                raise ProviderError("Sarvam TTS returned non-WAV audio.", provider="sarvam")
+
+            return out_path, "audio/wav"
+        except Exception:
+            # Cleanup on error
+            try:
+                if os.path.exists(out_path):
+                    os.remove(out_path)
+            except OSError:
+                pass
+            raise
+
+    # Fallback to original Piper behavior (unchanged)
+    # Existing implementation expects Piper binary, so call into it.
+    # Keep original behavior by delegating to previously implemented logic.
+    # Reuse current piper_exe_conf and model resolution below.
     if not text or not text.strip():
         raise ProviderError("Empty text is not allowed for TTS.", provider="piper")
 
@@ -201,6 +350,10 @@ async def generate_speech_wav_async(
     text: str,
     voice: str | None = None,
     max_chars: int = 5000,
+    language: str | None = None,
+    speaker: str | None = None,
+    pace: float | None = None,
+    temperature: float | None = None,
 ) -> Tuple[bytes, str]:
     """Async wrapper that serializes Piper jobs via a semaphore and runs
     the blocking work in a threadpool so the FastAPI event loop isn't
@@ -221,7 +374,16 @@ async def generate_speech_wav_async(
         # Run the blocking generator in a separate thread to avoid blocking
         # the event loop. This reuses the synchronous implementation which
         # already handles timeouts and cleanup.
-        result = await asyncio.to_thread(generate_speech_wav, text, voice, max_chars)
+        result = await asyncio.to_thread(
+    generate_speech_wav,
+    text,
+    voice,
+    max_chars,
+    language,
+    speaker,
+    pace,
+    temperature
+)
         run_ms = int((time.time() - run_start) * 1000)
         total_ms = int((time.time() - start_total) * 1000)
         # Log synthesis and total timings at INFO so they appear in Render logs

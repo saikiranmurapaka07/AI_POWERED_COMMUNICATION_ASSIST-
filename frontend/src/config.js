@@ -6,11 +6,12 @@
 // `/api` to the backend. This avoids mixed-content HTTPS vs HTTP issues when
 // the dev server is served over HTTPS but the backend is plain HTTP.
 const defaultBackend = "";
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || defaultBackend;
-export const STUN_URLS = import.meta.env.VITE_STUN_URLS || "stun:stun.l.google.com:19302";
-export const TURN_URL = import.meta.env.VITE_TURN_URL || "";
-export const TURN_USERNAME = import.meta.env.VITE_TURN_USERNAME || "";
-export const TURN_CREDENTIAL = import.meta.env.VITE_TURN_CREDENTIAL || "";
+const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {};
+export const BACKEND_URL = env.VITE_BACKEND_URL || defaultBackend;
+export const STUN_URLS = env.VITE_STUN_URLS || "stun:stun.l.google.com:19302";
+export const TURN_URL = env.VITE_TURN_URL || "";
+export const TURN_USERNAME = env.VITE_TURN_USERNAME || "";
+export const TURN_CREDENTIAL = env.VITE_TURN_CREDENTIAL || "";
 
 export function buildIceServers() {
   const servers = [];

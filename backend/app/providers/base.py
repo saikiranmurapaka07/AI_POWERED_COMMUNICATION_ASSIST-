@@ -72,8 +72,8 @@ class TranslationResult:
 
 
 class TranslationProvider(ABC):
-    # English, Hindi, Telugu — the three languages this project supports.
-    SUPPORTED_LANGUAGES = {"en", "hi", "te"}
+    # Expand supported languages to include the 11 requested Indian languages.
+    SUPPORTED_LANGUAGES = {"en", "hi", "bn", "ta", "te", "gu", "kn", "ml", "mr", "pa", "or"}
 
     @abstractmethod
     async def translate(

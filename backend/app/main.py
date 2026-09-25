@@ -1,3 +1,10 @@
+from pathlib import Path
+
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Always load the backend .env regardless of the current working directory.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 """FastAPI application entrypoint.
 
 Run locally with:
@@ -5,7 +12,6 @@ Run locally with:
 (from inside backend/, with backend/.env populated — see .env.example at
 the repo root).
 """
-from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,3 +44,4 @@ app.include_router(stt.router)
 app.include_router(tts.router)
 app.include_router(translate.router)
 app.include_router(ai.router)
+

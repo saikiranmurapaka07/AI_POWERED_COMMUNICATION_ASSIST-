@@ -33,10 +33,17 @@ async def synthesize_speech(request: Request, payload: TTSRequest) -> Response:
     logger.info("TTS request from origin=%s path=%s", origin, request.url.path)
 
     try:
-        # Offload blocking Piper work to a thread and serialize via a
-        # semaphore to avoid spawning concurrent heavy Piper processes.
+        # Offload blocking TTS work to a thread and serialize via a
+        # semaphore to avoid spawning concurrent heavy TTS processes.
+        # Forward the optional `language` from the frontend so providers
+        # (e.g. Sarvam) can select the correct locale mapping.
         wav_path, content_type = await generate_speech_wav_async(
-            payload.text, voice=payload.voice
+            payload.text,
+            voice=payload.voice,
+            language=payload.language,
+            speaker=payload.speaker,
+            pace=payload.pace,
+            temperature=payload.temperature,
         )
     except PiperNotFoundError as exc:
         logger.error("Piper not found: %s", exc)

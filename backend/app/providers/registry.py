@@ -1,4 +1,4 @@
-"""
+﻿"""
 Provider selection.
 
 Reads STT_PROVIDER / TTS_PROVIDER / TRANSLATION_PROVIDER / AI_PROVIDER
@@ -20,6 +20,11 @@ from app.providers.base import (
 
 @lru_cache
 def get_stt_provider() -> STTProvider:
+    if settings.stt_provider == "sarvam":
+        from app.providers.sarvam_stt import SarvamSTTProvider
+
+        return SarvamSTTProvider()
+
     if settings.stt_provider == "openai":
         from app.providers.openai_stt import OpenAISTTProvider
 
@@ -82,6 +87,11 @@ def get_translation_provider() -> TranslationProvider:
 
 @lru_cache
 def get_ai_provider() -> AIProvider:
+    if settings.ai_provider == "sarvam":
+        from app.providers.sarvam_ai import SarvamAIProvider
+
+        return SarvamAIProvider()
+
     if settings.ai_provider == "openai":
         from app.providers.openai_ai import OpenAIProvider
 

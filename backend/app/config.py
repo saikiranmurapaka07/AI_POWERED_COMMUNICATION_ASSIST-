@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # --- Provider selection ---
 
-    stt_provider: str = "openai"
+    stt_provider: str = "sarvam"
     tts_provider: str = "sarvam"
     translation_provider: str = "sarvam"
     ai_provider: str = "openai"

@@ -39,7 +39,7 @@ _LANG_MAP = {
     "ml": "ml-IN",
     "mr": "mr-IN",
     "pa": "pa-IN",
-    "or": "or-IN",
+    "or": "od-IN",
 }
 
 

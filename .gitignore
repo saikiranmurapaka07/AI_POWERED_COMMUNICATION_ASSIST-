@@ -55,3 +55,10 @@ backend/models/piper/**/*.ort
 # Ignore local .env variants (already covered but be explicit)
 .env.local
 .env.*.local
+
+# --- Local backup/test files ---
+*.bak
+*.backup
+*.before-*
+*.wav
+*.backup*
